@@ -1,0 +1,9 @@
+<launch>
+
+    <node
+        name="classroom_manager"
+        pkg="smart_classroom_core"
+        type="classroom_manager_node.py"
+        output="screen" />
+
+</launch>
