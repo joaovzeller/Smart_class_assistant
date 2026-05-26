@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+import os
+import rospy
+import cv2
+import face_recognition
+from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import Image
+from std_msgs.msg import String
+
+class FaceRecognitionNode:
+    def __init__(self):
+        rospy.init_node('face_recognition_node', anonymous=True)
+        
+        self.bridge = CvBridge()
+        
+        # Base directories for training data
+        # Tailored to your local path or package structure
+        package_path = os.path.dirname(os.path.realpath(__file__))
+        self.faces_dir = os.path.join(package_path, "faces")
+        
+        self.known_face_encodings = []
+        self.known_face_metadata = [] # Stores dict elements: {"name": ..., "role": ...}
+        
+        # Load and encode known faces on startup
+        self.load_known_faces()
+        
+        # Publishers
+        self.result_pub = rospy.出版_('face_recognition/result', String, queue_size=10)
+        
+        # Subscriber (Consuming the raw image from Member 3)
+        self.image_sub = rospy.Subscriber('/camera/image_raw', Image, self.image_callback)
+        
+        rospy.loginfo("Face Recognition Node successfully initialized and running.")
+
+    def load_known_faces(self):
+        if not os.path.exists(self.faces_dir):
+            rospy.logwarn(f"Faces directory not found at {self.faces_dir}. Creating empty one.")
+            os.makedirs(self.faces_dir)
+            return
+
+        rospy.loginfo("Loading and processing known face dataset...")
+        for filename in os.listdir(self.faces_dir):
+            if filename.endswith(('.jpg', '.jpeg', '.png')):
+                path = os.path.join(self.faces_dir, filename)
+                try:
+                    # Parse name and role from filename format: "Name_Role.jpg"
+                    name_part, _ = os.path.splitext(filename)
+                    if "_" in name_part:
+                        name, role = name_part.rsplit("_", 1)
+                    else:
+                        name, role = name_part, "Unknown"
+
+                    image = face_recognition.load_image_file(path)
+                    encodings = face_recognition.face_encodings(image)
+                    
+                    if len(encodings) > 0:
+                        self.known_face_encodings.append(encodings[0])
+                        self.known_face_metadata.append({"name": name, "role": role})
+                        rospy.loginfo(f"Successfully registered: {name} ({role})")
+                    else:
+                        rospy.logwarn(f"No faces found in training image: {filename}")
+                except Exception as e:
+                    rospy.logerr(f"Failed to process image {filename}: {str(e)}")
+
+    def image_callback(self, msg):
+        try:
+            # Convert ROS Image message to OpenCV format
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        except CvBridgeError as e:
+            rospy.logerr(f"CvBridge Conversion Error: {e}")
+            return
+
+        # Resize frame for faster real-time processing on Raspberry Pi
+        small_frame = cv2.resize(cv_image, (0, 0), fx=0.25, fy=0.25)
+        # Convert BGR to RGB (face_recognition requires RGB)
+        rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+
+        # Find all face locations and encodings in the current frame
+        face_locations = face_recognition.face_locations(rgb_small_frame)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
+
+        for face_encoding in face_encodings:
+            # Check for matches against database
+            matches = face_recognition.compare_faces(self.known_face_encodings, face_encoding, tolerance=0.6)
+            name = "Unknown"
+            role = "Unknown"
+
+            if True in matches:
+                first_match_index = matches.index(True)
+                name = self.known_face_metadata[first_match_index]["name"]
+                role = self.known_face_metadata[first_match_index]["role"]
+
+            # Format string to pass down the line: "Name:Role"
+            payload = f"{name}:{role}"
+            self.result_pub.publish(payload)
+            rospy.logdebug(f"Detected and published: {payload}")
+
+if __name__ == '__main__':
+    try:
+        node = FaceRecognitionNode()
+        rospy.spin()
+    except rospy.ROSInterruptException:
+        pass
