@@ -1,0 +1,1 @@
+print("Motion Detector Node Started")

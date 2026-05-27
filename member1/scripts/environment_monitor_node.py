@@ -1,0 +1,1 @@
+print("Environment Monitor Node Started")

@@ -1,0 +1,17 @@
+<launch>
+    <!-- Configurable parameters to scale facial evaluations -->
+    <arg name="recognition_tolerance" default="0.6" />
+    <arg name="resize_factor" default="0.25" />
+    <arg name="log_file_path" default="$(find member4_face_recognition)/scripts/attendance_logs.csv" />
+
+    <!-- Task 1: Face Recognition Node -->
+    <node pkg="member4_face_recognition" type="face_recognition_node.py" name="face_recognition_node" output="screen">
+        <param name="recognition_tolerance" value="$(arg recognition_tolerance)" />
+        <param name="resize_factor" value="$(arg resize_factor)" />
+    </node>
+
+    <!-- Task 2: Attendance Management Node -->
+    <node pkg="member4_face_recognition" type="attendance_node.py" name="attendance_node" output="screen">
+        <param name="log_file_path" value="$(arg log_file_path)" />
+    </node>
+</launch>
