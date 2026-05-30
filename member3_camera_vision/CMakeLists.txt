@@ -31,3 +31,7 @@ target_link_libraries(camera_vision_node
 install(TARGETS camera_vision_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_nosetests(tests/test_camera_vision.py)
+endif()
